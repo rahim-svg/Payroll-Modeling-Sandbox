@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # MongoDB — auth database
+  mongodb:
+    image: mongo:7.0
+    container_name: motek_mongodb
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_DATABASE: motek_payroll
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - motek_network
+
+  # Express Backend
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: motek_server
+    restart: unless-stopped
+    ports:
+      - '5000:5000'
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      MONGODB_URI: mongodb://mongodb:27017/motek_payroll
+      JWT_SECRET: replace_with_strong_secret_min_32_chars
+      JWT_EXPIRES_IN: 8h
+      ROLLFI_MOCK: true
+      ROLLFI_BASE_URL: https://api.rollfi.com
+      ROLLFI_API_KEY: your_rollfi_api_key_here
+      PYTHON_PATH: python3
+      CLIENT_URL: http://localhost:3000
+    volumes:
+      - ./server:/app
+      - ./solver:/solver
+      - /app/node_modules
+    depends_on:
+      - mongodb
+    networks:
+      - motek_network
+
+  # React Frontend
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: motek_client
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      VITE_API_BASE_URL: http://localhost:5000/api
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    depends_on:
+      - server
+    networks:
+      - motek_network
+
+volumes:
+  mongodb_data:
+
+networks:
+  motek_network:
+    driver: bridge

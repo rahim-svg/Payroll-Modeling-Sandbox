@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Environment variables — NEVER commit these
+.env
+*.env.local
+
+# Build outputs
+dist/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+venv/
+env/
+.venv/
+solver/__pycache__/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Temp files
+tmp/
+temp/
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage
+coverage/
+.nyc_output/
