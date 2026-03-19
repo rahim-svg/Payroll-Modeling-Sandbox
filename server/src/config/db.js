@@ -1,19 +1,18 @@
 /**
  * @file db.js
- * @description MongoDB connection configuration.
- *              Exports mongoose connection instance for use in models.
+ * @description MongoDB connection using Mongoose.
+ *              Reads connection string from MONGODB_URI environment variable.
  */
-import mongoose from 'mongoose'
+const mongoose = require('mongoose')
 
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI)
-    console.log('✅ MongoDB connected:', conn.connection.host)
-    return conn
-  } catch (err) {
-    console.error('❌ MongoDB connection error:', err.message)
+    console.log(`✅ MongoDB connected: ${conn.connection.host}`)
+  } catch (error) {
+    console.error('❌ MongoDB connection failed:', error.message)
     process.exit(1)
   }
 }
 
-export default connectDB
+module.exports = connectDB

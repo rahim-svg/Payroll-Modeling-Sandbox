@@ -1,28 +1,39 @@
 /**
  * @file auth.middleware.js
  * @description JWT authentication middleware.
- *              Extracts and validates JWT token from Authorization header.
- *              Attaches decoded user info to req.user.
+ *              Validates Bearer token on every protected route.
+ *              Attaches decoded user to req.user for downstream use.
  */
-import jwt from 'jsonwebtoken'
+const jwt = require('jsonwebtoken')
+const User = require('../models/User.model')
 
-export const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
   try {
-    // Extract token from 'Bearer <token>' header
+    // Extract token from Authorization header
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Missing or invalid authorization header' })
+      return res.status(401).json({ message: 'No token provided. Please log in.' })
     }
 
-    const token = authHeader.slice(7) // Remove 'Bearer '
+    const token = authHeader.split(' ')[1]
 
-    // Verify and decode token
+    // Verify token signature and expiry
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    req.user = decoded
+
+    // Fetch user from DB to ensure they still exist and are active
+    const user = await User.findById(decoded.userId).select('-password')
+    if (!user || !user.isActive) {
+      return res.status(401).json({ message: 'User not found or inactive.' })
+    }
+
+    req.user = user
     next()
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token', details: err.message })
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Session expired. Please log in again.' })
+    }
+    return res.status(401).json({ message: 'Invalid token. Please log in.' })
   }
 }
 
-export default authMiddleware
+module.exports = authMiddleware

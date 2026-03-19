@@ -1,22 +1,20 @@
 /**
  * @file validate.middleware.js
- * @description Express validator middleware.
- *              Validates request body/query based on validation chain.
+ * @description Express-validator result handler middleware.
+ *              Checks for validation errors and returns 422 if any are found.
+ *              Used after express-validator chains on routes.
  */
-import { validationResult } from 'express-validator'
+const { validationResult } = require('express-validator')
 
-export const validateRequest = (req, res, next) => {
+const validate = (req, res, next) => {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
-    return res.status(400).json({
-      error: 'Validation failed',
-      details: errors.array().map((err) => ({
-        field: err.param,
-        message: err.msg,
-      })),
+    return res.status(422).json({
+      message: 'Validation failed',
+      errors: errors.array(),
     })
   }
   next()
 }
 
-export default validateRequest
+module.exports = validate

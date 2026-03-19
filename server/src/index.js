@@ -1,44 +1,31 @@
 /**
  * @file index.js
- * @description Express server entry point.
- *              Sets up middleware, database connection, routes, and error handling.
+ * @description Express application entry point.
+ *              Configures middleware chain, mounts all route groups,
+ *              connects to MongoDB, and starts the HTTP server.
  */
-import express from 'express'
-import cors from 'cors'
-import dotenv from 'dotenv'
-import mongoose from 'mongoose'
-import authRoutes from './routes/auth.routes.js'
-import censusRoutes from './routes/census.routes.js'
-import runRoutes from './routes/run.routes.js'
-import exportRoutes from './routes/export.routes.js'
-import { errorMiddleware } from './middleware/error.middleware.js'
+require('dotenv').config()
+const express = require('express')
+const cors = require('cors')
+const path = require('path')
+const connectDB = require('./config/db')
+const errorMiddleware = require('./middleware/error.middleware')
 
-dotenv.config()
+// Route imports
+const authRoutes = require('./routes/auth.routes')
+const censusRoutes = require('./routes/census.routes')
+const runRoutes = require('./routes/run.routes')
+const exportRoutes = require('./routes/export.routes')
 
 const app = express()
 const PORT = process.env.PORT || 5000
 
-// ============================================
-// MIDDLEWARE
-// ============================================
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000' }))
-app.use(express.json({ limit: '50mb' }))
-app.use(express.urlencoded({ limit: '50mb', extended: true }))
+// ─── Middleware Chain ───────────────────────────────────────────────────────
+app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000', credentials: true }))
+app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
 
-// ============================================
-// DATABASE
-// ============================================
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch((err) => {
-    console.error('❌ MongoDB connection failed:', err.message)
-    process.exit(1)
-  })
-
-// ============================================
-// ROUTES
-// ============================================
+// ─── Routes ─────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes)
 app.use('/api/census', censusRoutes)
 app.use('/api/run', runRoutes)
@@ -46,26 +33,19 @@ app.use('/api/export', exportRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  res.json({ status: 'ok', environment: process.env.NODE_ENV, rollfiMock: process.env.ROLLFI_MOCK === 'true' })
 })
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' })
-})
-
-// ============================================
-// ERROR HANDLING
-// ============================================
+// ─── Global Error Handler ────────────────────────────────────────────────────
 app.use(errorMiddleware)
 
-// ============================================
-// START SERVER
-// ============================================
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`)
-  console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`)
-  console.log(`🔒 Rollfi Mock Mode: ${process.env.ROLLFI_MOCK === 'true' ? 'enabled' : 'disabled'}`)
-})
+// ─── Start Server ─────────────────────────────────────────────────────────
+const start = async () => {
+  await connectDB()
+  app.listen(PORT, () => {
+    console.log(`✅ MoTek Payroll Engine running on port ${PORT}`)
+    console.log(`📊 Rollfi mode: ${process.env.ROLLFI_MOCK === 'true' ? 'MOCK' : 'LIVE'}`)
+  })
+}
 
-export default app
+start()
