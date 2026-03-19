@@ -1,6 +1,6 @@
 /**
  * @file Header.jsx
- * @description Top header bar — shows current user email and logout button.
+ * @description Top header showing current user and logout button.
  */
 import { useAuth } from '@/context/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -10,13 +10,8 @@ export default function Header() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
-
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
+    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
       <div>
         <h1 className="text-lg font-semibold text-gray-900">Payroll Modeling Sandbox</h1>
         <p className="text-xs text-gray-500">Internal simulation tool — not for production payroll</p>
@@ -29,7 +24,7 @@ export default function Header() {
           <span>{user?.email}</span>
         </div>
         <button
-          onClick={handleLogout}
+          onClick={() => { logout(); navigate('/login') }}
           className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-600 transition-colors"
         >
           <LogOut className="h-4 w-4" />

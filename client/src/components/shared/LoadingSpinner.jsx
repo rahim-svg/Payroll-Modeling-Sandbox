@@ -1,6 +1,6 @@
 /**
  * @file LoadingSpinner.jsx
- * @description Reusable animated loading spinner with optional message.
+ * @description Reusable loading spinner with optional message.
  */
 import { cn } from '@/utils/cn'
 

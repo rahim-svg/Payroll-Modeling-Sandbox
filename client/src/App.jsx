@@ -1,7 +1,6 @@
 /**
  * @file App.jsx
- * @description Root application component.
- *              Defines all routes. Protected routes require valid JWT.
+ * @description Root component. Sets up routing with protected routes.
  */
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'

@@ -1,6 +1,6 @@
 /**
  * @file ExportButton.jsx
- * @description Button that triggers Excel export download for a payroll run.
+ * @description Triggers Excel export download for a completed run.
  */
 import { Download } from 'lucide-react'
 import { useState } from 'react'

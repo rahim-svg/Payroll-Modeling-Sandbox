@@ -1,6 +1,5 @@
 /**
  * @file useAuth.js
- * @description Convenience re-export of useAuth from AuthContext.
- *              Import this hook anywhere auth state is needed.
+ * @description Re-exports useAuth from AuthContext for clean imports.
  */
 export { useAuth } from '@/context/AuthContext'

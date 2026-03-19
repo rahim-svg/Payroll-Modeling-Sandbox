@@ -1,110 +1,39 @@
 /**
  * @file SavingsSummary.jsx
- * @description Payroll tax savings summary.
- *              Shows aggregate savings by benefit type and per employee.
- *              Includes a recharts bar chart for visual comparison.
+ * @description Aggregate savings summary cards shown at the top of results.
  */
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { formatCurrency } from '@/utils/formatters'
+import { TrendingDown, Users, DollarSign, CheckCircle } from 'lucide-react'
 
-export default function SavingsSummary({ data }) {
-  if (!data) {
-    return <EmptyState message="No savings data available" />
+export default function SavingsSummary({ summary }) {
+  if (!summary) return null
+
+  const cards = [
+    { label: 'Total Employees', value: summary.totalEmployees, icon: Users, color: 'blue' },
+    { label: 'Successfully Solved', value: `${summary.solvedCount} / ${summary.totalEmployees}`, icon: CheckCircle, color: 'green' },
+    { label: 'Employee Tax Savings', value: formatCurrency(summary.totalEmployeeTaxSavings), icon: TrendingDown, color: 'green' },
+    { label: 'Employer Tax Savings', value: formatCurrency(summary.totalEmployerTaxSavings), icon: DollarSign, color: 'purple' },
+    { label: 'Total Combined Savings', value: formatCurrency(summary.totalSavings), icon: DollarSign, color: 'emerald' },
+  ]
+
+  const colorMap = {
+    blue: 'bg-blue-50 text-blue-600',
+    green: 'bg-green-50 text-green-600',
+    purple: 'bg-purple-50 text-purple-600',
+    emerald: 'bg-emerald-50 text-emerald-600',
   }
 
   return (
-    <div className="space-y-6">
-      {/* Top Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard label="Total Employee Savings" value={formatCurrency(data.totalEmployeeSavings)} color="green" />
-        <StatCard label="Total Employer Savings" value={formatCurrency(data.totalEmployerSavings)} color="blue" />
-        <StatCard label="Combined Savings" value={formatCurrency(data.totalCombinedSavings)} color="indigo" />
-      </div>
-
-      {/* Chart */}
-      {data.chartData?.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-6">Savings by Employee</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data.chartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
-              <Tooltip formatter={(value) => formatCurrency(value)} />
-              <Legend />
-              <Bar dataKey="employeeSavings" name="EE Savings" fill="#22c55e" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="employerSavings" name="ER Savings" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* WIMPER / SIMERP Breakdown */}
-      {data.solverResults?.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="font-semibold text-gray-900">Solver Results</h3>
-            <p className="text-xs text-gray-500 mt-1">WIMPER (Sec. 125) and SIMERP (Sec. 105) values per employee</p>
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {cards.map(({ label, value, icon: Icon, color }) => (
+        <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className={`inline-flex p-2 rounded-lg ${colorMap[color]} mb-3`}>
+            <Icon className="h-5 w-5" />
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left font-medium text-gray-500">Employee</th>
-                  <th className="px-6 py-3 text-right font-medium text-gray-500">VCAMP Target</th>
-                  <th className="px-6 py-3 text-right font-medium text-gray-500">WIMPER</th>
-                  <th className="px-6 py-3 text-right font-medium text-gray-500">SIMERP</th>
-                  <th className="px-6 py-3 text-right font-medium text-gray-500">Iterations</th>
-                  <th className="px-6 py-3 text-center font-medium text-gray-500">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {data.solverResults.map((r) => (
-                  <tr key={r.employeeId} className="hover:bg-gray-50">
-                    <td className="px-6 py-3">
-                      <p className="font-medium text-gray-900">{r.name}</p>
-                      <p className="text-xs text-gray-500">{r.employeeId}</p>
-                    </td>
-                    <td className="px-6 py-3 text-right">{formatCurrency(r.vcampTarget)}</td>
-                    <td className="px-6 py-3 text-right font-medium text-blue-700">{formatCurrency(r.wimper)}</td>
-                    <td className="px-6 py-3 text-right font-medium text-indigo-700">{formatCurrency(r.simerp)}</td>
-                    <td className="px-6 py-3 text-right text-gray-500">{r.iterations}</td>
-                    <td className="px-6 py-3 text-center">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        r.status === 'converged' ? 'bg-green-100 text-green-800' :
-                        r.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>{r.status}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p className="text-xs text-gray-500 mt-1">{label}</p>
         </div>
-      )}
-    </div>
-  )
-}
-
-function StatCard({ label, value, color }) {
-  const colors = {
-    green: 'bg-green-50 border-green-200 text-green-700',
-    blue: 'bg-blue-50 border-blue-200 text-blue-700',
-    indigo: 'bg-indigo-50 border-indigo-200 text-indigo-700',
-  }
-  return (
-    <div className={`rounded-2xl border p-5 ${colors[color]}`}>
-      <p className="text-sm font-medium opacity-75">{label}</p>
-      <p className="text-2xl font-bold mt-1">{value}</p>
-    </div>
-  )
-}
-
-function EmptyState({ message }) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
-      <p className="text-gray-500">{message}</p>
+      ))}
     </div>
   )
 }

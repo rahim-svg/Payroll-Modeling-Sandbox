@@ -1,7 +1,6 @@
 /**
  * @file ProtectedRoute.jsx
- * @description Route guard — redirects unauthenticated users to /login.
- *              Shows spinner while auth state is being validated on mount.
+ * @description Redirects unauthenticated users to /login.
  */
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
@@ -14,24 +13,20 @@ export default function ProtectedRoute() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <LoadingSpinner size="lg" message="Authenticating..." />
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner size="lg" message="Loading..." />
       </div>
     )
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
+  if (!user) return <Navigate to="/login" replace />
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
-        </main>
+        <main className="flex-1 p-6"><Outlet /></main>
       </div>
     </div>
   )

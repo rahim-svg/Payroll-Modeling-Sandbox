@@ -1,104 +1,90 @@
 /**
  * @file ResultsPage.jsx
- * @description Payroll results page.
- *              Shows before vs after comparison, payroll register, employee paychecks,
- *              and savings summary. Allows Excel export.
+ * @description Shows payroll simulation results.
+ *              Polls run status until complete, then displays comparison data.
  */
-import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useParams } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useRunStatus } from '@/hooks/useRunStatus'
 import { runService } from '@/services/run.service'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
-import ComparisonTable from '@/components/results/ComparisonTable'
-import PayrollRegister from '@/components/results/PayrollRegister'
+import StatusBadge from '@/components/shared/StatusBadge'
 import SavingsSummary from '@/components/results/SavingsSummary'
-import EmployeePaycheck from '@/components/results/EmployeePaycheck'
+import ComparisonTable from '@/components/results/ComparisonTable'
 import ExportButton from '@/components/shared/ExportButton'
-import { useState } from 'react'
 
-const TABS = [
-  { key: 'comparison', label: 'Before vs After' },
-  { key: 'register', label: 'Payroll Register' },
-  { key: 'paychecks', label: 'Employee Paychecks' },
-  { key: 'savings', label: 'Savings Summary' },
-]
+const STATUS_MESSAGES = {
+  solving: 'Running Python solver — calculating WIMPER & SIMERP...',
+  submitting: 'Submitting payroll scenarios to Rollfi...',
+  processing: 'Generating comparison results...',
+  complete: 'Run complete!',
+  failed: 'Run failed.',
+}
 
 export default function ResultsPage() {
   const { runId } = useParams()
-  const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('comparison')
+  const { status, error: statusError } = useRunStatus(runId)
+  const [results, setResults] = useState(null)
+  const [fetchError, setFetchError] = useState(null)
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['run-results', runId],
-    queryFn: () => runService.getResults(runId),
-    enabled: !!runId,
-  })
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-96">
-        <LoadingSpinner size="lg" message="Loading results..." />
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <div className="p-6 bg-red-50 border border-red-200 rounded-2xl text-center">
-          <p className="text-red-600 font-medium">Failed to load results</p>
-          <p className="text-sm text-red-500 mt-1">{error.message}</p>
-          <button onClick={() => navigate('/dashboard')} className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm">
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  const results = data?.results
+  // Fetch results once run is complete
+  useEffect(() => {
+    if (status !== 'complete') return
+    const fetchResults = async () => {
+      try {
+        const { data } = await runService.getResults(runId)
+        setResults(data.results)
+      } catch (err) {
+        setFetchError(err.response?.data?.message || 'Failed to load results')
+      }
+    }
+    fetchResults()
+  }, [status, runId])
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Payroll Run Results</h2>
-          <p className="text-gray-500 mt-1">Run ID: {runId} — {results?.employeeCount} employee(s) processed</p>
+          <h2 className="text-2xl font-bold text-gray-900">Simulation Results</h2>
+          <p className="text-sm text-gray-500 mt-1">Run ID: {runId}</p>
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => navigate('/bulk-run')} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-            New Run
-          </button>
-          <ExportButton runId={runId} />
+        <div className="flex items-center gap-3">
+          {status && <StatusBadge status={status} />}
+          {status === 'complete' && <ExportButton runId={runId} />}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="flex gap-1">
-          {TABS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === key
-                  ? 'border-blue-600 text-blue-700'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
-      </div>
+      {/* Status / Loading */}
+      {status && status !== 'complete' && status !== 'failed' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+          <LoadingSpinner size="lg" message={STATUS_MESSAGES[status] || 'Processing...'} />
+        </div>
+      )}
 
-      {/* Tab Content */}
-      <div>
-        {activeTab === 'comparison' && <ComparisonTable data={results?.comparison} />}
-        {activeTab === 'register' && <PayrollRegister data={results?.register} />}
-        {activeTab === 'paychecks' && <EmployeePaycheck data={results?.paychecks} />}
-        {activeTab === 'savings' && <SavingsSummary data={results?.savings} />}
-      </div>
+      {/* Error states */}
+      {(statusError || fetchError) && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <p className="text-sm text-red-700">{statusError || fetchError}</p>
+        </div>
+      )}
+
+      {/* Results */}
+      {results && (
+        <>
+          <SavingsSummary summary={results.summary} />
+
+          <div className="bg-white rounded-xl border border-gray-200">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900">Payroll Register — Before vs After</h3>
+              <p className="text-sm text-gray-500 mt-0.5">Normal payroll compared to hybrid strategy payroll</p>
+            </div>
+            <div className="p-6">
+              <ComparisonTable employees={results.employees} />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
