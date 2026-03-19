@@ -1,13 +1,19 @@
 # Dependencies
 node_modules/
 
-# Environment variables — NEVER commit these
+# Environment files — NEVER commit these
 .env
-*.env.local
+.env.local
+.env.production
 
 # Build outputs
 dist/
 build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
 
 # Python
 __pycache__/
@@ -17,28 +23,17 @@ __pycache__/
 venv/
 env/
 .venv/
-solver/__pycache__/
+*.egg-info/
 
-# Logs
-logs/
-*.log
-npm-debug.log*
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
 
 # Temp files
 tmp/
 temp/
-*.tmp
-
-# OS
-.DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Coverage
-coverage/
-.nyc_output/

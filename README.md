@@ -1,126 +1,168 @@
 # MoTek Payroll Modeling Sandbox
 
-Internal web-based payroll modeling tool for MoTek. Simulates Normal vs Hybrid payroll scenarios using WIMPER/SIMERP calculations via a Python solver and Rollfi as the payroll calculation engine.
+Internal payroll simulation tool for modeling Normal vs Hybrid payroll scenarios using WIMPER (Section 125) and SIMERP (Section 105) strategies.
+
+> **Sandbox Only** — This tool is not for production payroll operations. All runs are ephemeral with no YTD tracking or persistent employee records.
 
 ---
 
-## ⚠️ Important
+## Architecture
 
-This is a **sandbox simulation tool only**. It is not a payroll engine and does not perform production payroll operations. All runs are independent simulations with no persistent data storage.
+```
+client/     → React + Vite frontend (shadcn/ui + Tailwind)
+server/     → Node.js + Express backend (MVC)
+solver/     → Python WIMPER/SIMERP iterative solver
+```
 
----
-
-## 🧱 Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | React + Vite + Tailwind + shadcn/ui |
-| Backend | Node.js + Express |
-| Database | MongoDB (auth only) |
-| Solver | Python 3 (WIMPER/SIMERP) |
-| Payroll Engine | Rollfi API |
-| Local Dev | Docker Compose |
+**Flow:** Upload Census → Validate → Python Solver → Rollfi (Mock) → Comparison → Export
 
 ---
 
-## 🚀 Local Setup
+## Prerequisites
 
-### Prerequisites
-- Node.js 18+
-- Python 3.8+
-- MongoDB (local or Atlas)
-- Docker + Docker Compose (optional)
+- Node.js v18+
+- Python 3.x
+- MongoDB (local or Docker)
+- npm or yarn
 
-### 1. Clone the repo
+---
+
+## Quick Start (Local Development)
+
+### 1. Clone the repository
+
 ```bash
 git clone https://github.com/rahim-svg/Payroll-Modeling-Sandbox.git
 cd Payroll-Modeling-Sandbox
 ```
 
-### 2. Set up environment variables
-```bash
-# Backend
-cp server/.env.example server/.env
-# Fill in your values in server/.env
+### 2. Set up the backend
 
-# Frontend
-cp client/.env.example client/.env
+```bash
+cd server
+npm install
+cp .env.example .env
+# Edit .env and set your MONGODB_URI and JWT_SECRET
 ```
 
-### 3. Install dependencies
+### 3. Seed the database (creates the 2 default users)
+
 ```bash
-# Backend
-cd server && npm install
-
-# Frontend
-cd ../client && npm install
-
-# Python solver
-cd ../solver && pip install -r requirements.txt
+npm run seed
 ```
 
-### 4. Seed the database
+This creates:
+- `admin@motek.com` / `MoTek@2024`
+- `analyst@motek.com` / `MoTek@2024`
+
+### 4. Start the backend
+
 ```bash
-cd server && npm run seed
+npm run dev
+# Server runs on http://localhost:5000
 ```
 
-### 5. Run the app
-```bash
-# Terminal 1 — Backend
-cd server && npm run dev
+### 5. Set up the frontend (new terminal)
 
-# Terminal 2 — Frontend
-cd client && npm run dev
+```bash
+cd client
+npm install
+cp .env.example .env
 ```
 
-### OR — Run with Docker
+### 6. Start the frontend
+
 ```bash
-docker-compose up --build
+npm run dev
+# App runs on http://localhost:3000
+```
+
+### 7. Verify Python solver works
+
+```bash
+cd solver
+echo '[{"employee_id":"EMP001","gross_wages":3500,"vcamp_target":200,"medical_ee":150,"dental_ee":25,"vision_ee":10,"debit_card":50,"ancillary":25}]' | python3 solver.py
+```
+
+Expected output: JSON with `wimper`, `simerp`, `iterations`, and `status` per employee.
+
+---
+
+## Docker Setup
+
+```bash
+# Start all services
+docker-compose up
+
+# Run seed after containers start
+docker exec motek_server npm run seed
 ```
 
 ---
 
-## 🔐 Default Login Credentials
+## Environment Variables
 
-| Role | Email | Password |
+### Server (`server/.env`)
+
+| Variable | Description | Default |
 |---|---|---|
-| Admin | admin@motek.com | MoTek@2024 |
-| Analyst | analyst@motek.com | MoTek@2024 |
+| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017/motek_payroll` |
+| `JWT_SECRET` | JWT signing secret (min 32 chars) | — |
+| `JWT_EXPIRES_IN` | Token expiry | `8h` |
+| `PORT` | Server port | `5000` |
+| `CORS_ORIGIN` | Frontend URL | `http://localhost:3000` |
+| `ROLLFI_MOCK` | Use mock Rollfi data | `true` |
+| `ROLLFI_API_URL` | Real Rollfi API URL | — |
+| `ROLLFI_API_KEY` | Real Rollfi API key | — |
+
+### Client (`client/.env`)
+
+| Variable | Description |
+|---|---|
+| `VITE_API_BASE_URL` | Backend API URL |
 
 ---
 
-## 📁 Project Structure
+## Rollfi Integration
 
-```
-Payroll-Modeling-Sandbox/
-├── client/          → React frontend
-├── server/          → Node.js + Express backend
-├── solver/          → Python WIMPER/SIMERP solver
-├── docker-compose.yml
-└── README.md
-```
+Rollfi is currently **mocked**. When you receive Rollfi API credentials:
 
----
+1. Set `ROLLFI_MOCK=false` in `server/.env`
+2. Set `ROLLFI_API_URL` and `ROLLFI_API_KEY`
+3. Implement the real API call in `server/src/services/rollfi.service.js` inside `callRollfiAPI()`
 
-## 🔄 Workflow
-
-1. Upload payroll census Excel file
-2. System validates and parses file
-3. Python solver calculates WIMPER + SIMERP per employee
-4. System submits both Normal and Hybrid scenarios to Rollfi
-5. Results returned as before vs after comparison
-6. Export Excel summary report
+No other code changes needed.
 
 ---
 
-## 🌐 Rollfi Integration
+## Supported Workflows
 
-Rollfi API is currently **mocked** for local development.
-Set `ROLLFI_MOCK=false` in `server/.env` when real credentials are available.
+### Bulk Payroll Run
+1. Download census template from the Template page
+2. Fill in employee data
+3. Upload on the Bulk Run page
+4. View comparison results and export to Excel
+
+### Single Employee Run
+1. Go to Single Employee page
+2. Fill in the form manually
+3. Run simulation
+4. View results
 
 ---
 
-## 📋 Census Template
+## Default Users
 
-Download the master payroll census template from the **Template** page in the UI,
-or directly from `/api/export/template`.
+| Email | Password | Role |
+|---|---|---|
+| admin@motek.com | MoTek@2024 | Admin |
+| analyst@motek.com | MoTek@2024 | Analyst |
+
+---
+
+## Important Notes
+
+- All payroll results are **temporary** — stored in server memory only
+- Closing or restarting the server clears all run results
+- Export your Excel report before closing the browser
+- This is a **sandbox** — Rollfi is the authoritative source for real payroll numbers
