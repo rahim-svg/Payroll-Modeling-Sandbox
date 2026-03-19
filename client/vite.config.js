@@ -1,7 +1,6 @@
 /**
  * @file vite.config.js
- * @description Vite configuration for MoTek Payroll Engine frontend.
- *              Proxies /api requests to the Express backend on port 5000.
+ * @description Vite configuration. Proxies /api calls to Express backend.
  */
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -9,18 +8,9 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
+  resolve: { alias: { '@': path.resolve(__dirname, './src') } },
   server: {
     port: 3000,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-      },
-    },
+    proxy: { '/api': { target: 'http://localhost:5000', changeOrigin: true } },
   },
 })

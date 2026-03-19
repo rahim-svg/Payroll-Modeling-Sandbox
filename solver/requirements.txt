@@ -1,10 +1,2 @@
-# Python solver dependencies
-# Install with: pip install -r requirements.txt
-
-# No external dependencies required for the base solver
-# Standard library only: sys, json, math
-# Add below if extended features are needed:
-
-# numpy>=1.24.0       # For advanced numerical operations
-# scipy>=1.10.0       # For optimization algorithms if needed
-# pandas>=2.0.0       # For data manipulation if needed
+numpy>=1.24.0
+scipy>=1.11.0

@@ -1,129 +1,148 @@
 """
 @file solver.py
-@description Main entry point for the WIMPER/SIMERP iterative solver.
-             Reads employee JSON from stdin, processes each employee independently,
-             and writes solver results as JSON to stdout.
+@description Main Python solver entry point for WIMPER and SIMERP calculation.
+             Reads employee data from stdin as JSON.
+             Iteratively solves for WIMPER/SIMERP values that meet the VCAMP target.
+             Writes results to stdout as JSON.
 
-Usage: echo '[...]' | python3 solver.py
+Usage:
+    echo '{"employees": [...]}' | python3 solver.py
 """
 import sys
 import json
-from wimper import calculate_wimper
-from simerp import calculate_simerp
-from constraints import apply_constraints
+from models import EmployeeInput, Benefits, SolveResult
+from wimper import calculate_wimper_tax_savings
+from simerp import calculate_simerp, calculate_total_hybrid_savings
+from constraints import validate_constraints
+
+# Solver configuration
+MAX_ITERATIONS = 25
+TOLERANCE = 0.01       # $0.01 — match VCAMP target within one cent
+SIMERP_RATIO = 0.6     # SIMERP = 60% of WIMPER
+STEP_FACTOR = 0.5      # Binary search step factor
 
 
-def solve_employee(employee):
+def solve_employee(emp: EmployeeInput) -> SolveResult:
     """
-    Solve WIMPER and SIMERP for a single employee using iterative convergence.
-    Uses VCAMP target as the desired payroll tax savings amount.
+    Iteratively solves for WIMPER that generates savings matching the VCAMP target.
+    Uses a binary search approach between 0 and gross_pay.
 
-    Args:
-        employee (dict): Single employee record with all payroll fields
-
-    Returns:
-        dict: Solver result with wimper, simerp, iterations, and status
+    @param emp: EmployeeInput with gross_pay, vcamp target, benefits
+    @returns: SolveResult with wimper, simerp, status, iterations
     """
-    employee_id = employee.get('employee_id')
-    vcamp_target = float(employee.get('vcamp_target', 0))
-    gross_wages = float(employee.get('gross_wages', 0))
+    target = emp.vcamp
+    gross = emp.gross_pay
 
-    # Benefit inputs
-    medical_ee = float(employee.get('medical_ee', 0))
-    dental_ee = float(employee.get('dental_ee', 0))
-    vision_ee = float(employee.get('vision_ee', 0))
-    debit_card = float(employee.get('debit_card', 0))
-    ancillary = float(employee.get('ancillary', 0))
+    # Binary search bounds
+    low = 0.0
+    high = gross
+    best_wimper = 0.0
+    best_simerp = 0.0
+    best_savings = 0.0
+    best_diff = float('inf')
 
-    # Total existing pre-tax benefits
-    total_benefits = medical_ee + dental_ee + vision_ee + debit_card + ancillary
+    for iteration in range(1, MAX_ITERATIONS + 1):
+        # Midpoint wimper
+        wimper = round((low + high) / 2, 2)
+        simerp = calculate_simerp(wimper, SIMERRP_RATIO=SIMERP_RATIO)
 
-    # Initialise solver variables
-    wimper = 0.0
-    simerp = 0.0
-    tolerance = 0.01  # $0.01 convergence tolerance
-    max_iterations = 25
-    iterations = 0
-    status = 'not_converged'
+        # Validate constraints
+        valid, _ = validate_constraints(wimper, simerp, gross)
+        if not valid:
+            high = wimper
+            continue
 
-    # Iterative solver loop
-    for i in range(max_iterations):
-        iterations += 1
+        # Calculate total savings this WIMPER generates
+        savings = calculate_total_hybrid_savings(wimper, simerp, gross)
+        diff = abs(savings - target)
 
-        # Calculate WIMPER (Section 125 pre-tax deduction)
-        new_wimper = calculate_wimper(
-            gross_wages=gross_wages,
-            vcamp_target=vcamp_target,
-            total_benefits=total_benefits,
-            simerp=simerp
-        )
+        # Track best result so far
+        if diff < best_diff:
+            best_diff = diff
+            best_wimper = wimper
+            best_simerp = simerp
+            best_savings = savings
 
-        # Calculate SIMERP (Section 105 reimbursement)
-        new_simerp = calculate_simerp(
-            gross_wages=gross_wages,
-            wimper=new_wimper,
-            vcamp_target=vcamp_target,
-            total_benefits=total_benefits
-        )
+        # Check if within tolerance — done
+        if diff <= TOLERANCE:
+            return SolveResult(
+                employee_id=emp.employee_id,
+                wimper=best_wimper,
+                simerp=best_simerp,
+                vcamp_target=target,
+                achieved_savings=best_savings,
+                iterations=iteration,
+                status='solved',
+                message=f'Converged in {iteration} iterations',
+            )
 
-        # Apply constraints: WIMPER must be > SIMERP, both non-negative
-        new_wimper, new_simerp = apply_constraints(
-            wimper=new_wimper,
-            simerp=new_simerp,
-            gross_wages=gross_wages,
-            total_benefits=total_benefits
-        )
-
-        # Check convergence — stop if values stabilise within tolerance
-        wimper_delta = abs(new_wimper - wimper)
-        simerp_delta = abs(new_simerp - simerp)
-
-        wimper = new_wimper
-        simerp = new_simerp
-
-        if wimper_delta < tolerance and simerp_delta < tolerance and iterations >= 5:
-            status = 'converged'
-            break
-
-    # Mark as partial if we hit max iterations without full convergence
-    if status != 'converged':
-        actual_savings = wimper + simerp
-        if actual_savings > 0 and actual_savings >= vcamp_target * 0.8:
-            status = 'partial'  # Within 80% of target
+        # Adjust search bounds based on whether savings are above or below target
+        if savings < target:
+            low = wimper  # Need higher WIMPER to get more savings
         else:
-            status = 'not_converged'
+            high = wimper  # Overshooting — reduce WIMPER
 
-    return {
-        'employee_id': employee_id,
-        'wimper': round(wimper, 2),
-        'simerp': round(simerp, 2),
-        'iterations': iterations,
-        'status': status,
-        'vcamp_target': vcamp_target,
-    }
+    # Max iterations reached — return best result found
+    status = 'solved' if best_diff <= TOLERANCE else 'partial'
+    return SolveResult(
+        employee_id=emp.employee_id,
+        wimper=best_wimper,
+        simerp=best_simerp,
+        vcamp_target=target,
+        achieved_savings=best_savings,
+        iterations=MAX_ITERATIONS,
+        status=status,
+        message=f'Best result after {MAX_ITERATIONS} iterations. Diff: ${best_diff:.4f}',
+    )
 
 
 def main():
     """
-    Read employee array from stdin, solve each employee, write results to stdout.
+    Main entry point. Reads JSON from stdin, solves for each employee,
+    writes results JSON to stdout.
     """
     try:
-        input_data = sys.stdin.read()
-        employees = json.loads(input_data)
+        raw = sys.stdin.read()
+        data = json.loads(raw)
+        employees_raw = data.get('employees', [])
 
-        if not isinstance(employees, list):
-            employees = [employees]
+        results = []
+        for emp_data in employees_raw:
+            benefits_data = emp_data.get('benefits', {})
+            benefits = Benefits(
+                medical=benefits_data.get('medical', 0),
+                dental=benefits_data.get('dental', 0),
+                vision=benefits_data.get('vision', 0),
+                debit_card=benefits_data.get('debitCard', 0),
+                ancillary=benefits_data.get('ancillary', 0),
+            )
+            emp = EmployeeInput(
+                employee_id=emp_data['employeeId'],
+                gross_pay=float(emp_data['grossPay']),
+                pay_schedule=emp_data.get('paySchedule', 'biweekly'),
+                filing_status=emp_data.get('filingStatus', 'single'),
+                state=emp_data.get('state', 'TX'),
+                vcamp=float(emp_data.get('vcamp', 0)),
+                benefits=benefits,
+            )
 
-        results = [solve_employee(emp) for emp in employees]
+            result = solve_employee(emp)
+            results.append({
+                'employeeId': result.employee_id,
+                'wimper': result.wimper,
+                'simerp': result.simerp,
+                'vcampTarget': result.vcamp_target,
+                'achievedSavings': result.achieved_savings,
+                'iterations': result.iterations,
+                'status': result.status,
+                'message': result.message,
+            })
 
-        # Write results to stdout for Node.js to read
-        print(json.dumps(results))
+        # Write results to stdout for Node.js to consume
+        sys.stdout.write(json.dumps(results))
 
-    except json.JSONDecodeError as e:
-        print(json.dumps({'error': f'Invalid JSON input: {str(e)}'}), file=sys.stderr)
-        sys.exit(1)
     except Exception as e:
-        print(json.dumps({'error': str(e)}), file=sys.stderr)
+        sys.stderr.write(f'Solver error: {str(e)}')
         sys.exit(1)
 
 

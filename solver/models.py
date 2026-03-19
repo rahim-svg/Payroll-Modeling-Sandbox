@@ -1,41 +1,43 @@
 """
 @file models.py
-@description Data models / dataclasses for solver input and output.
-             Used for type safety and documentation within the Python solver.
+@description Data models (dataclasses) for the solver.
+             Defines the input and output structure for each employee.
 """
 from dataclasses import dataclass, field
 from typing import Optional
 
 
 @dataclass
-class EmployeeInput:
-    """Input record for a single employee from the census file."""
-    employee_id: str
-    first_name: str
-    last_name: str
-    pay_frequency: str
-    gross_wages: float
-    filing_status: str
-    federal_allowances: int
-    state: str
-    medical_ee: float = 0.0
-    medical_er: float = 0.0
-    dental_ee: float = 0.0
-    dental_er: float = 0.0
-    vision_ee: float = 0.0
-    vision_er: float = 0.0
+class Benefits:
+    medical: float = 0.0
+    dental: float = 0.0
+    vision: float = 0.0
     debit_card: float = 0.0
     ancillary: float = 0.0
-    vcamp_target: float = 0.0
-    ssn_last4: Optional[str] = None
+
+    @property
+    def total(self) -> float:
+        return self.medical + self.dental + self.vision + self.debit_card + self.ancillary
 
 
 @dataclass
-class SolverResult:
-    """Output from the solver for a single employee."""
+class EmployeeInput:
     employee_id: str
-    wimper: float
-    simerp: float
+    gross_pay: float
+    pay_schedule: str
+    filing_status: str
+    state: str
+    vcamp: float  # Target payroll tax savings
+    benefits: Benefits = field(default_factory=Benefits)
+
+
+@dataclass
+class SolveResult:
+    employee_id: str
+    wimper: float          # Section 125 pre-tax deduction
+    simerp: float          # Section 105 employer reimbursement
+    vcamp_target: float    # Original target
+    achieved_savings: float  # Actual savings achieved
     iterations: int
-    status: str  # 'converged' | 'partial' | 'not_converged'
-    vcamp_target: float
+    status: str            # 'solved', 'partial', 'failed'
+    message: str = ''

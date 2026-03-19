@@ -1,7 +1,6 @@
 /**
  * @file cn.js
- * @description Utility to merge Tailwind CSS class names safely.
- *              Combines clsx and tailwind-merge to avoid class conflicts.
+ * @description Utility for merging Tailwind class names safely.
  */
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'

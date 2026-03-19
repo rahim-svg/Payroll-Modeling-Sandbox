@@ -1,50 +1,42 @@
 """
 @file simerp.py
-@description SIMERP (Section 105 Health Reimbursement) calculator.
-             SIMERP is an employer-funded reimbursement under Section 105(b).
-             It provides additional tax savings that complement the WIMPER deduction.
-
-Section 105 allows employers to reimburse employees for qualified medical
-expenses tax-free, reducing the employer's payroll tax obligations.
+@description SIMERP (Section 105) calculation logic.
+             SIMERP is an employer-funded medical expense reimbursement.
+             It is non-taxable to the employee and tax-deductible for the employer.
+             SIMERP must always be less than WIMPER.
 """
 
-# FICA rate for tax savings calculation
-FICA_RATE = 0.0765
 
-
-def calculate_simerp(gross_wages, wimper, vcamp_target, total_benefits):
+def calculate_simerp(wimper: float, ratio: float = 0.6) -> float:
     """
-    Calculate the SIMERP reimbursement amount for an employee.
+    Calculates SIMERP as a ratio of WIMPER.
+    Default ratio is 0.6 (SIMERP = 60% of WIMPER).
+    This ensures WIMPER > SIMERP constraint is always satisfied.
 
-    SIMERP handles the remaining portion of the VCAMP target
-    that WIMPER alone cannot satisfy.
-
-    The constraint WIMPER > SIMERP must always be maintained.
-
-    Args:
-        gross_wages (float): Employee gross wages per pay period
-        wimper (float): Calculated WIMPER amount from current iteration
-        vcamp_target (float): Desired payroll tax savings (VCAMP target)
-        total_benefits (float): Existing pre-tax benefit deductions
-
-    Returns:
-        float: Calculated SIMERP reimbursement amount
+    @param wimper: Calculated WIMPER amount
+    @param ratio: SIMERP to WIMPER ratio (must be < 1.0)
+    @returns: Calculated SIMERP amount
     """
-    if vcamp_target <= 0 or gross_wages <= 0:
-        return 0.0
+    if ratio >= 1.0:
+        raise ValueError('SIMERP ratio must be less than 1.0 to ensure WIMPER > SIMERP')
 
-    # Remaining savings target after WIMPER contribution
-    wimper_savings = wimper * FICA_RATE
-    remaining_target = max(0, vcamp_target - wimper_savings)
+    return round(wimper * ratio, 2)
 
-    # Back-calculate SIMERP from remaining savings target
-    simerp = remaining_target / FICA_RATE if FICA_RATE > 0 else 0
 
-    # SIMERP must be less than WIMPER per constraint
-    simerp = min(simerp, wimper * 0.95)  # Keep SIMERP below WIMPER
+def calculate_total_hybrid_savings(wimper: float, simerp: float, gross_pay: float) -> float:
+    """
+    Calculates total savings from combining WIMPER + SIMERP.
+    Includes employee FICA savings and employer FICA savings.
 
-    # SIMERP cannot push total deductions beyond gross wages
-    max_simerp = max(0, gross_wages - total_benefits - wimper)
-    simerp = min(simerp, max_simerp)
+    @param wimper: Section 125 pre-tax deduction
+    @param simerp: Section 105 reimbursement
+    @param gross_pay: Employee gross pay
+    @returns: Total estimated payroll tax savings
+    """
+    FICA_RATE = 0.0765
+    taxable_gross = max(0, gross_pay - wimper)
 
-    return round(max(0, simerp), 2)
+    employee_savings = round((gross_pay - taxable_gross) * FICA_RATE, 2)
+    employer_savings = round(wimper * FICA_RATE, 2)
+
+    return round(employee_savings + employer_savings, 2)
