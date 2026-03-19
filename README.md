@@ -1,126 +1,123 @@
 # MoTek Payroll Modeling Sandbox
 
-Internal web-based payroll modeling tool for MoTek. Simulates Normal vs Hybrid payroll scenarios using WIMPER/SIMERP calculations via a Python solver and Rollfi as the payroll calculation engine.
+Internal simulation tool for comparing **Normal Payroll** vs **Hybrid Payroll** strategies using WIMPER (Section 125), VCAMP (Section 213d), and SIMERP (Section 105).
+
+> ⚠️ **This is a sandbox simulation tool only. Not for production payroll operations.**
 
 ---
 
-## ⚠️ Important
-
-This is a **sandbox simulation tool only**. It is not a payroll engine and does not perform production payroll operations. All runs are independent simulations with no persistent data storage.
-
----
-
-## 🧱 Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | React + Vite + Tailwind + shadcn/ui |
-| Backend | Node.js + Express |
-| Database | MongoDB (auth only) |
-| Solver | Python 3 (WIMPER/SIMERP) |
-| Payroll Engine | Rollfi API |
-| Local Dev | Docker Compose |
-
----
-
-## 🚀 Local Setup
-
-### Prerequisites
-- Node.js 18+
-- Python 3.8+
-- MongoDB (local or Atlas)
-- Docker + Docker Compose (optional)
-
-### 1. Clone the repo
-```bash
-git clone https://github.com/rahim-svg/Payroll-Modeling-Sandbox.git
-cd Payroll-Modeling-Sandbox
-```
-
-### 2. Set up environment variables
-```bash
-# Backend
-cp server/.env.example server/.env
-# Fill in your values in server/.env
-
-# Frontend
-cp client/.env.example client/.env
-```
-
-### 3. Install dependencies
-```bash
-# Backend
-cd server && npm install
-
-# Frontend
-cd ../client && npm install
-
-# Python solver
-cd ../solver && pip install -r requirements.txt
-```
-
-### 4. Seed the database
-```bash
-cd server && npm run seed
-```
-
-### 5. Run the app
-```bash
-# Terminal 1 — Backend
-cd server && npm run dev
-
-# Terminal 2 — Frontend
-cd client && npm run dev
-```
-
-### OR — Run with Docker
-```bash
-docker-compose up --build
-```
-
----
-
-## 🔐 Default Login Credentials
-
-| Role | Email | Password |
-|---|---|---|
-| Admin | admin@motek.com | MoTek@2024 |
-| Analyst | analyst@motek.com | MoTek@2024 |
-
----
-
-## 📁 Project Structure
+## Project Structure
 
 ```
-Payroll-Modeling-Sandbox/
-├── client/          → React frontend
-├── server/          → Node.js + Express backend
-├── solver/          → Python WIMPER/SIMERP solver
-├── docker-compose.yml
+motek-payroll-engine/
+├── client/          → React + Vite frontend
+├── server/          → Node.js + Express backend (coming soon)
+├── solver/          → Python WIMPER/SIMERP solver (coming soon)
 └── README.md
 ```
 
 ---
 
-## 🔄 Workflow
+## Frontend Setup
 
-1. Upload payroll census Excel file
-2. System validates and parses file
-3. Python solver calculates WIMPER + SIMERP per employee
-4. System submits both Normal and Hybrid scenarios to Rollfi
-5. Results returned as before vs after comparison
-6. Export Excel summary report
+### Prerequisites
+- Node.js 18+
+- npm 9+
+
+### Steps
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/rahim-svg/Payroll-Modeling-Sandbox.git
+cd Payroll-Modeling-Sandbox
+
+# 2. Navigate to client
+cd client
+
+# 3. Install dependencies
+npm install
+
+# 4. Create your .env file
+cp .env.example .env
+
+# 5. Start the development server
+npm run dev
+```
+
+Frontend runs at: **http://localhost:3000**
+
+> The frontend proxies all `/api` requests to the backend at `http://localhost:5000`.
+> Make sure the backend server is running before testing API features.
 
 ---
 
-## 🌐 Rollfi Integration
+## Default Login Credentials (Seeded)
 
-Rollfi API is currently **mocked** for local development.
-Set `ROLLFI_MOCK=false` in `server/.env` when real credentials are available.
+| Email | Password | Role |
+|---|---|---|
+| admin@motek.com | MoTek@2024 | Admin |
+| analyst@motek.com | MoTek@2024 | Analyst |
+
+> Credentials are seeded by the backend on first run.
 
 ---
 
-## 📋 Census Template
+## Frontend Pages
 
-Download the master payroll census template from the **Template** page in the UI,
-or directly from `/api/export/template`.
+| Route | Page | Description |
+|---|---|---|
+| `/login` | Login | JWT authentication |
+| `/dashboard` | Dashboard | Overview and quick start |
+| `/bulk-run` | Bulk Run | Upload census file for multi-employee simulation |
+| `/single-employee` | Single Employee | Manual entry for one employee |
+| `/results/:runId` | Results | Before/after comparison, register, paychecks |
+| `/template` | Template | Download census Excel template |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 + Vite |
+| UI | Tailwind CSS + shadcn/ui (Radix) |
+| State | React Query + Context API |
+| Forms | React Hook Form |
+| HTTP | Axios |
+| Charts | Recharts |
+| Routing | React Router v6 |
+
+---
+
+## Architecture
+
+```
+User → React Frontend
+         ↓
+    Express Backend
+         ↓
+    Python Solver (child_process)
+         ↓
+    Rollfi API (mocked for sandbox)
+         ↓
+    Results → Frontend → Excel Export
+```
+
+---
+
+## Out of Scope
+
+- Production payroll operations
+- YTD tracking or payroll history
+- Persistent employee records
+- Gross-to-net payroll calculations outside Rollfi
+- Multi-tenant or multi-client management
+- Mobile apps
+
+---
+
+## Team
+
+- **MoTek** — Business rules, UAT, Rollfi coordination
+- **Paklogics** — Full system development
+- **Rollfi** — Payroll calculation engine (authoritative source)
