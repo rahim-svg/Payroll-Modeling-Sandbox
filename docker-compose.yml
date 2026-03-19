@@ -1,27 +1,16 @@
-# docker-compose.yml
-# Local development environment for MoTek Payroll Engine
-# Run with: docker-compose up
-
 version: '3.8'
 
 services:
-  # MongoDB database — auth storage only
   mongodb:
-    image: mongo:7.0
-    container_name: motek_mongodb
+    image: mongo:7
+    container_name: motek_mongo
     ports:
       - '27017:27017'
     volumes:
-      - mongodb_data:/data/db
-    environment:
-      MONGO_INITDB_DATABASE: motek_payroll
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - mongo_data:/data/db
+    networks:
+      - motek_network
 
-  # Express backend
   server:
     build:
       context: ./server
@@ -30,21 +19,19 @@ services:
     ports:
       - '5000:5000'
     environment:
-      - MONGODB_URI=mongodb://mongodb:27017/motek_payroll
-      - JWT_SECRET=local_dev_secret_change_in_production
-      - JWT_EXPIRES_IN=8h
-      - PORT=5000
-      - CORS_ORIGIN=http://localhost:3000
-      - ROLLFI_MOCK=true
       - NODE_ENV=development
-    volumes:
-      - ./solver:/app/solver
-      - ./server/src:/app/src
+      - MONGODB_URI=mongodb://mongodb:27017/motek_payroll
+    env_file:
+      - ./server/.env
     depends_on:
-      mongodb:
-        condition: service_healthy
+      - mongodb
+    volumes:
+      - ./server:/app
+      - ./solver:/solver
+      - /app/node_modules
+    networks:
+      - motek_network
 
-  # React frontend
   client:
     build:
       context: ./client
@@ -52,10 +39,17 @@ services:
     container_name: motek_client
     ports:
       - '3000:3000'
-    environment:
-      - VITE_API_BASE_URL=http://localhost:5000/api
     depends_on:
       - server
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    networks:
+      - motek_network
 
 volumes:
-  mongodb_data:
+  mongo_data:
+
+networks:
+  motek_network:
+    driver: bridge

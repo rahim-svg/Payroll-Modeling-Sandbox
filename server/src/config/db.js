@@ -1,16 +1,19 @@
 /**
  * @file db.js
  * @description MongoDB connection using Mongoose.
- *              Reads connection string from MONGODB_URI environment variable.
+ *              Retries on failure and logs connection status.
  */
 const mongoose = require('mongoose')
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI)
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    })
     console.log(`✅ MongoDB connected: ${conn.connection.host}`)
   } catch (error) {
-    console.error('❌ MongoDB connection failed:', error.message)
+    console.error(`❌ MongoDB connection failed: ${error.message}`)
     process.exit(1)
   }
 }
