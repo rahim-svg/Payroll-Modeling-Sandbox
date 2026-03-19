@@ -1,28 +1,23 @@
 /**
  * @file census.routes.js
- * @description Census validation route — allows pre-validation without running full pipeline.
- * @route POST /api/census/validate
+ * @description Census file upload and template download routes.
+ * @route POST /api/census/upload
+ * @route GET  /api/census/template
  */
 const express = require('express')
+const { uploadCensus, downloadTemplate } = require('../controllers/census.controller')
 const authMiddleware = require('../middleware/auth.middleware')
 const upload = require('../middleware/upload.middleware')
-const censusService = require('../services/census.service')
 
 const router = express.Router()
 
-// POST /api/census/validate — validate file without running
-router.post('/validate', authMiddleware, upload.single('census'), async (req, res, next) => {
-  try {
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' })
-    const { employees, validationErrors } = await censusService.parseAndValidate(req.file.buffer)
-    res.json({
-      valid: validationErrors.length === 0,
-      employeeCount: employees.length,
-      validationErrors,
-    })
-  } catch (error) {
-    next(error)
-  }
-})
+// All census routes require authentication
+router.use(authMiddleware)
+
+// Upload and validate census Excel file
+router.post('/upload', upload.single('census'), uploadCensus)
+
+// Download the census template
+router.get('/template', downloadTemplate)
 
 module.exports = router

@@ -1,16 +1,16 @@
 /**
  * @file auth.controller.js
- * @description Handles all authentication logic.
+ * @description Handles authentication logic — login and token validation.
  * @route POST /api/auth/login
  * @route GET  /api/auth/me
  */
 const bcrypt = require('bcryptjs')
-const jwt = require('jsonwebtoken')
 const User = require('../models/User.model')
+const { generateToken } = require('../utils/token.util')
 
 /**
  * POST /api/auth/login
- * Validates credentials and returns a signed JWT token.
+ * Validates credentials and returns JWT token
  */
 const login = async (req, res, next) => {
   try {
@@ -19,30 +19,27 @@ const login = async (req, res, next) => {
     // Find user by email
     const user = await User.findOne({ email: email.toLowerCase() })
     if (!user) {
-      return res.status(401).json({ message: 'Invalid email or password' })
+      return res.status(401).json({ success: false, message: 'Invalid email or password' })
     }
 
-    // Compare password against stored hash
+    // Compare submitted password against stored hash
     const isMatch = await bcrypt.compare(password, user.password)
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid email or password' })
+      return res.status(401).json({ success: false, message: 'Invalid email or password' })
     }
 
-    // Check account is active
-    if (!user.isActive) {
-      return res.status(403).json({ message: 'Account is disabled. Contact your administrator.' })
-    }
-
-    // Sign JWT token with user ID
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
-    )
+    // Generate JWT
+    const token = generateToken(user._id)
 
     res.json({
+      success: true,
       token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
     })
   } catch (error) {
     next(error)
@@ -51,14 +48,22 @@ const login = async (req, res, next) => {
 
 /**
  * GET /api/auth/me
- * Returns current user info from JWT. Used by frontend on page load to validate session.
+ * Returns current user from valid JWT (used to validate token on app load)
  */
-const me = async (req, res, next) => {
+const getMe = async (req, res, next) => {
   try {
-    res.json({ user: req.user })
+    res.json({
+      success: true,
+      user: {
+        id: req.user._id,
+        email: req.user.email,
+        name: req.user.name,
+        role: req.user.role,
+      },
+    })
   } catch (error) {
     next(error)
   }
 }
 
-module.exports = { login, me }
+module.exports = { login, getMe }

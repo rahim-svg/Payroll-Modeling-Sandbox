@@ -1,42 +1,43 @@
 /**
  * @file solver.service.js
- * @description Invokes the Python WIMPER/SIMERP solver as a child process.
- *              Passes employee data as JSON via stdin and reads results from stdout.
- *              Each employee is processed independently.
+ * @description Invokes the Python solver via child_process.
+ *              Passes employee data as JSON stdin and receives solver results as JSON stdout.
  */
 const { spawn } = require('child_process')
 const path = require('path')
 
-// Path to the Python solver entry point
-const SOLVER_PATH = path.join(__dirname, '../../../solver/solver.py')
-
 /**
- * Run the Python solver for an array of employees.
- * @param {Array} employees - Validated employee records
- * @returns {Promise<Array>} - Solver results with WIMPER, SIMERP, iterations, and status per employee
+ * Runs the Python WIMPER/SIMERP solver for all employees
+ * @param {Array} employees - Validated employee array from census
+ * @returns {Promise<Array>} Solver results per employee
  */
 const solve = (employees) => {
   return new Promise((resolve, reject) => {
-    // Spawn Python process — pass employee data as JSON via stdin
-    const pythonProcess = spawn('python3', [SOLVER_PATH])
+    const pythonPath = process.env.PYTHON_PATH || 'python3'
+    const solverPath = path.resolve(
+      __dirname,
+      process.env.SOLVER_PATH || '../../../solver/solver.py'
+    )
+
+    // Spawn Python process
+    const python = spawn(pythonPath, [solverPath])
 
     let stdout = ''
     let stderr = ''
 
+    // Send employee data to Python via stdin
+    python.stdin.write(JSON.stringify({ employees }))
+    python.stdin.end()
+
     // Collect stdout (solver results)
-    pythonProcess.stdout.on('data', (data) => {
-      stdout += data.toString()
-    })
+    python.stdout.on('data', (data) => { stdout += data.toString() })
 
     // Collect stderr (solver logs/errors)
-    pythonProcess.stderr.on('data', (data) => {
-      stderr += data.toString()
-    })
+    python.stderr.on('data', (data) => { stderr += data.toString() })
 
-    // Handle process completion
-    pythonProcess.on('close', (code) => {
+    python.on('close', (code) => {
       if (code !== 0) {
-        console.error('[Solver] Python process error:', stderr)
+        console.error('[SOLVER] Python error:', stderr)
         return reject(new Error(`Solver failed with exit code ${code}: ${stderr}`))
       }
       try {
@@ -46,10 +47,6 @@ const solve = (employees) => {
         reject(new Error(`Failed to parse solver output: ${stdout}`))
       }
     })
-
-    // Send employee data to Python via stdin
-    pythonProcess.stdin.write(JSON.stringify(employees))
-    pythonProcess.stdin.end()
   })
 }
 

@@ -1,23 +1,23 @@
 /**
  * @file upload.middleware.js
  * @description Multer configuration for census file uploads.
- *              Accepts only Excel files (.xlsx, .xls).
- *              Stores files in memory (no disk writes) for ephemeral processing.
+ *              Accepts only .xlsx files, stores in memory (no disk persistence).
  */
 const multer = require('multer')
 
-// Use memory storage — file never touches disk, keeping everything ephemeral
+// Store file in memory — no disk writes, fully ephemeral
 const storage = multer.memoryStorage()
 
 const fileFilter = (req, file, cb) => {
-  const allowedMimeTypes = [
+  // Only accept Excel files
+  const allowed = [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-excel',
   ]
-  if (allowedMimeTypes.includes(file.mimetype) || file.originalname.match(/\.(xlsx|xls)$/i)) {
+  if (allowed.includes(file.mimetype)) {
     cb(null, true)
   } else {
-    cb(new Error('Only Excel files (.xlsx, .xls) are accepted'), false)
+    cb(new Error('Only .xlsx Excel files are accepted'), false)
   }
 }
 

@@ -1,112 +1,104 @@
 /**
  * @file rollfi.service.js
- * @description Rollfi API integration service.
+ * @description Rollfi API integration layer.
  *              When ROLLFI_MOCK=true, returns realistic mock payroll data.
  *              When ROLLFI_MOCK=false, calls the real Rollfi API.
- *              Switch between modes by changing the .env variable — no code changes needed.
+ *              Flip the env var when real API credentials are available.
  */
-const { PAY_PERIODS_PER_YEAR } = require('../config/constants')
+const { roundCurrency } = require('../utils/payroll.util')
 
 /**
- * Submit employees to Rollfi for payroll calculation.
- * @param {Array} employees - Employee records
- * @param {'normal'|'hybrid'} scenario - Which scenario to run
- * @param {Array} solverResults - WIMPER/SIMERP values (used for hybrid scenario)
- * @returns {Promise<Object>} - Rollfi payroll journal and paycheck data
+ * Runs normal payroll (no hybrid strategy) through Rollfi
+ * @param {Array} employees
+ * @returns {Promise<Array>} Normal payroll results per employee
  */
-const runPayroll = async (employees, scenario, solverResults) => {
-  const isMock = process.env.ROLLFI_MOCK !== 'false'
-
-  if (isMock) {
-    return generateMockPayroll(employees, scenario, solverResults)
+const runNormalPayroll = async (employees) => {
+  if (process.env.ROLLFI_MOCK === 'true') {
+    return mockNormalPayroll(employees)
   }
-
-  // Real Rollfi API call — implement when credentials are available
-  return callRollfiAPI(employees, scenario, solverResults)
+  // TODO: Replace with real Rollfi API call when credentials are available
+  throw new Error('Real Rollfi API not configured. Set ROLLFI_MOCK=true or add API credentials.')
 }
 
 /**
- * Generate realistic mock payroll data for sandbox testing.
- * Simulates what Rollfi would return for Normal and Hybrid scenarios.
+ * Runs hybrid payroll (with WIMPER + SIMERP) through Rollfi
+ * @param {Array} employees
+ * @param {Array} solverResults - WIMPER/SIMERP values from Python solver
+ * @returns {Promise<Array>} Hybrid payroll results per employee
  */
-const generateMockPayroll = (employees, scenario, solverResults) => {
-  const solverMap = {}
-  solverResults.forEach(r => { solverMap[r.employee_id] = r })
+const runHybridPayroll = async (employees, solverResults) => {
+  if (process.env.ROLLFI_MOCK === 'true') {
+    return mockHybridPayroll(employees, solverResults)
+  }
+  // TODO: Replace with real Rollfi API call
+  throw new Error('Real Rollfi API not configured. Set ROLLFI_MOCK=true or add API credentials.')
+}
 
-  const paychecks = employees.map(emp => {
-    const solver = solverMap[emp.employee_id] || { wimper: 0, simerp: 0 }
-    const gross = emp.gross_wages
-    const periods = PAY_PERIODS_PER_YEAR[emp.pay_frequency] || 26
+// ─── Mock Implementations ───────────────────────────────────────────
 
-    // Simplified tax estimates (mock values — Rollfi calculates real values)
-    const federalTax = gross * 0.12
-    const stateTax = gross * 0.04
-    const socialSecurity = gross * 0.062
-    const medicare = gross * 0.0145
-
-    const totalBenefits = emp.medical_ee + emp.dental_ee + emp.vision_ee
-
-    let wimper = 0
-    let simerp = 0
-
-    if (scenario === 'hybrid') {
-      wimper = solver.wimper || 0
-      simerp = solver.simerp || 0
-    }
-
-    // Pre-tax deductions reduce taxable income
-    const pretaxDeductions = totalBenefits + wimper
-    const taxableWages = Math.max(0, gross - pretaxDeductions)
-    const adjustedFederalTax = taxableWages * 0.12
-    const adjustedSS = taxableWages * 0.062
-    const adjustedMedicare = taxableWages * 0.0145
-
-    const totalDeductions = adjustedFederalTax + stateTax + adjustedSS + adjustedMedicare + totalBenefits + wimper + simerp
-    const netPay = gross - totalDeductions
+const mockNormalPayroll = (employees) => {
+  return employees.map((emp) => {
+    const federalTax = roundCurrency(emp.grossPay * 0.22)
+    const stateTax = roundCurrency(emp.grossPay * 0.05)
+    const socialSecurity = roundCurrency(emp.grossPay * 0.062)
+    const medicare = roundCurrency(emp.grossPay * 0.0145)
+    const totalDeductions = roundCurrency(federalTax + stateTax + socialSecurity + medicare)
+    const netPay = roundCurrency(emp.grossPay - totalDeductions)
 
     return {
-      employee_id: emp.employee_id,
-      name: `${emp.first_name} ${emp.last_name}`,
-      scenario,
-      grossPay: gross,
-      federalTax: adjustedFederalTax,
+      employeeId: emp.employeeId,
+      scenario: 'normal',
+      grossPay: emp.grossPay,
+      federalTax,
       stateTax,
-      socialSecurity: adjustedSS,
-      medicare: adjustedMedicare,
-      medical: emp.medical_ee,
-      dental: emp.dental_ee,
-      vision: emp.vision_ee,
-      wimper,
-      simerp,
-      totalDeductions,
-      netPay: Math.max(0, netPay),
-      // Employer side
-      erSocialSecurity: taxableWages * 0.062,
-      erMedicare: taxableWages * 0.0145,
-      erMedical: emp.medical_er,
-      erDental: emp.dental_er,
-      erVision: emp.vision_er,
+      socialSecurity,
+      medicare,
+      totalEmployeeTax: totalDeductions,
+      employerSocialSecurity: roundCurrency(emp.grossPay * 0.062),
+      employerMedicare: roundCurrency(emp.grossPay * 0.0145),
+      totalEmployerTax: roundCurrency(emp.grossPay * 0.0765),
+      netPay,
+      benefits: emp.benefits,
     }
   })
-
-  return { scenario, paychecks }
 }
 
-/**
- * Real Rollfi API call — implement when API credentials are available.
- * Replace the URL and auth headers with real Rollfi API details.
- */
-const callRollfiAPI = async (employees, scenario, solverResults) => {
-  // TODO: Implement real Rollfi API integration
-  // const response = await axios.post(`${process.env.ROLLFI_API_URL}/payroll/run`, {
-  //   employees,
-  //   scenario,
-  //   solverResults,
-  // }, {
-  //   headers: { 'Authorization': `Bearer ${process.env.ROLLFI_API_KEY}` }
-  // })
-  // return response.data
-  throw new Error('Real Rollfi API not yet configured. Set ROLLFI_MOCK=true in .env.')
+const mockHybridPayroll = (employees, solverResults) => {
+  return employees.map((emp) => {
+    // Find solver result for this employee
+    const solved = solverResults.find((s) => s.employeeId === emp.employeeId) || {}
+    const wimper = solved.wimper || 0
+    const simerp = solved.simerp || 0
+
+    // Taxable gross is reduced by WIMPER (Section 125 pre-tax)
+    const taxableGross = roundCurrency(emp.grossPay - wimper)
+
+    const federalTax = roundCurrency(taxableGross * 0.22)
+    const stateTax = roundCurrency(taxableGross * 0.05)
+    const socialSecurity = roundCurrency(taxableGross * 0.062)
+    const medicare = roundCurrency(taxableGross * 0.0145)
+    const totalDeductions = roundCurrency(federalTax + stateTax + socialSecurity + medicare)
+    const netPay = roundCurrency(taxableGross - totalDeductions + simerp)
+
+    return {
+      employeeId: emp.employeeId,
+      scenario: 'hybrid',
+      grossPay: emp.grossPay,
+      wimper,
+      simerp,
+      taxableGross,
+      federalTax,
+      stateTax,
+      socialSecurity,
+      medicare,
+      totalEmployeeTax: totalDeductions,
+      employerSocialSecurity: roundCurrency(taxableGross * 0.062),
+      employerMedicare: roundCurrency(taxableGross * 0.0145),
+      totalEmployerTax: roundCurrency(taxableGross * 0.0765),
+      netPay,
+      benefits: emp.benefits,
+    }
+  })
 }
 
-module.exports = { runPayroll }
+module.exports = { runNormalPayroll, runHybridPayroll }

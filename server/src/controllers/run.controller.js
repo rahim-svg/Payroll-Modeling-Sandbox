@@ -1,11 +1,11 @@
 /**
  * @file run.controller.js
- * @description Orchestrates the full payroll run lifecycle.
- *              Coordinates census parsing, solver invocation, Rollfi submission,
- *              comparison generation, and result storage in memory.
+ * @description Orchestrates the full payroll simulation run.
+ *              Coordinates: solver → Rollfi → comparison → results.
  * @route POST /api/run/bulk
  * @route POST /api/run/single
- * @route GET  /api/run/results/:runId
+ * @route GET  /api/run/:runId/status
+ * @route GET  /api/run/:runId/results
  */
 const { v4: uuidv4 } = require('uuid')
 const censusService = require('../services/census.service')
@@ -13,44 +13,30 @@ const solverService = require('../services/solver.service')
 const rollfiService = require('../services/rollfi.service')
 const comparisonService = require('../services/comparison.service')
 
-// In-memory store for run results — ephemeral, cleared when server restarts
+// In-memory run store — ephemeral, cleared when server restarts
 const runStore = new Map()
 
 /**
  * POST /api/run/bulk
- * Processes an uploaded census Excel file through the full payroll simulation pipeline.
+ * Full bulk payroll simulation run from uploaded census
  */
-const startBulkRun = async (req, res, next) => {
+const bulkRun = async (req, res, next) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No census file uploaded.' })
+    const { employees } = req.body
+
+    if (!employees || !Array.isArray(employees) || employees.length === 0) {
+      return res.status(400).json({ success: false, message: 'No employee data provided' })
     }
 
-    // Step 1: Parse and validate the uploaded Excel file
-    const { employees, validationErrors } = await censusService.parseAndValidate(req.file.buffer)
-
-    if (validationErrors.length > 0) {
-      return res.status(422).json({
-        message: 'Census file has validation errors. Please fix and re-upload.',
-        validationErrors,
-      })
-    }
-
-    // Step 2: Run Python solver to calculate WIMPER and SIMERP per employee
-    const solverResults = await solverService.solve(employees)
-
-    // Step 3: Submit both scenarios to Rollfi
-    const normalPayroll = await rollfiService.runPayroll(employees, 'normal', [])
-    const hybridPayroll = await rollfiService.runPayroll(employees, 'hybrid', solverResults)
-
-    // Step 4: Build comparison and reporting outputs
-    const results = comparisonService.buildComparison(employees, normalPayroll, hybridPayroll, solverResults)
-
-    // Step 5: Store results in memory with a unique run ID
+    // Create a unique run ID for this simulation
     const runId = uuidv4()
-    runStore.set(runId, { results, createdAt: new Date() })
+    runStore.set(runId, { status: 'solving', startedAt: new Date(), employees: [] })
 
-    res.json({ runId, employeeCount: employees.length, message: 'Run complete' })
+    // Run solver and Rollfi async — return runId immediately
+    res.json({ success: true, runId, message: 'Run started' })
+
+    // Process in background
+    processRun(runId, employees)
   } catch (error) {
     next(error)
   }
@@ -58,54 +44,103 @@ const startBulkRun = async (req, res, next) => {
 
 /**
  * POST /api/run/single
- * Runs payroll simulation for a single employee from form data.
+ * Single employee payroll simulation
  */
-const startSingleRun = async (req, res, next) => {
+const singleRun = async (req, res, next) => {
   try {
-    const employeeData = req.body
+    const { employee } = req.body
 
-    // Wrap single employee in array for consistent processing
-    const employees = [{ ...employeeData, employee_id: employeeData.employee_id || uuidv4() }]
-
-    // Validate the single employee record
-    const { validationErrors } = await censusService.validateEmployees(employees)
-    if (validationErrors.length > 0) {
-      return res.status(422).json({ message: 'Invalid employee data', validationErrors })
+    if (!employee) {
+      return res.status(400).json({ success: false, message: 'No employee data provided' })
     }
 
-    // Run solver, Rollfi, and build comparison — same pipeline as bulk
-    const solverResults = await solverService.solve(employees)
-    const normalPayroll = await rollfiService.runPayroll(employees, 'normal', [])
-    const hybridPayroll = await rollfiService.runPayroll(employees, 'hybrid', solverResults)
-    const results = comparisonService.buildComparison(employees, normalPayroll, hybridPayroll, solverResults)
-
     const runId = uuidv4()
-    runStore.set(runId, { results, createdAt: new Date() })
+    runStore.set(runId, { status: 'solving', startedAt: new Date(), employees: [] })
 
-    res.json({ runId, employeeCount: 1, message: 'Single employee run complete' })
+    res.json({ success: true, runId, message: 'Single employee run started' })
+
+    processRun(runId, [employee])
   } catch (error) {
     next(error)
   }
 }
 
 /**
- * GET /api/run/results/:runId
- * Retrieves stored results for a completed run.
+ * GET /api/run/:runId/status
+ * Returns current status of a run
  */
-const getResults = async (req, res, next) => {
+const getRunStatus = async (req, res, next) => {
   try {
     const { runId } = req.params
     const run = runStore.get(runId)
 
     if (!run) {
-      return res.status(404).json({ message: 'Run not found. Results are temporary and may have expired.' })
+      return res.status(404).json({ success: false, message: 'Run not found' })
     }
 
-    res.json({ runId, results: run.results })
+    res.json({ success: true, runId, status: run.status, error: run.error || null })
   } catch (error) {
     next(error)
   }
 }
 
-// Export runStore so export controller can access results
-module.exports = { startBulkRun, startSingleRun, getResults, runStore }
+/**
+ * GET /api/run/:runId/results
+ * Returns full results of a completed run
+ */
+const getRunResults = async (req, res, next) => {
+  try {
+    const { runId } = req.params
+    const run = runStore.get(runId)
+
+    if (!run) {
+      return res.status(404).json({ success: false, message: 'Run not found' })
+    }
+
+    if (run.status !== 'complete') {
+      return res.status(400).json({ success: false, message: `Run is not complete. Current status: ${run.status}` })
+    }
+
+    res.json({ success: true, runId, results: run.results })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Internal async run processor
+ * Runs solver → Rollfi → comparison and stores results
+ */
+const processRun = async (runId, employees) => {
+  try {
+    // Step 1: Run Python solver for WIMPER/SIMERP
+    runStore.get(runId).status = 'solving'
+    const solverResults = await solverService.solve(employees)
+
+    // Step 2: Submit both scenarios to Rollfi
+    runStore.get(runId).status = 'submitting'
+    const normalResults = await rollfiService.runNormalPayroll(employees)
+    const hybridResults = await rollfiService.runHybridPayroll(employees, solverResults)
+
+    // Step 3: Generate comparison
+    runStore.get(runId).status = 'processing'
+    const comparison = comparisonService.compare(normalResults, hybridResults, solverResults)
+
+    // Step 4: Store results
+    runStore.set(runId, {
+      ...runStore.get(runId),
+      status: 'complete',
+      completedAt: new Date(),
+      results: comparison,
+    })
+  } catch (error) {
+    console.error(`[RUN ${runId}] Failed:`, error.message)
+    runStore.set(runId, {
+      ...runStore.get(runId),
+      status: 'failed',
+      error: error.message,
+    })
+  }
+}
+
+module.exports = { bulkRun, singleRun, getRunStatus, getRunResults, runStore }

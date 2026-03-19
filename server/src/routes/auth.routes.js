@@ -6,13 +6,13 @@
  */
 const express = require('express')
 const { body } = require('express-validator')
-const { login, me } = require('../controllers/auth.controller')
-const authMiddleware = require('../middleware/auth.middleware')
+const { login, getMe } = require('../controllers/auth.controller')
 const validate = require('../middleware/validate.middleware')
+const authMiddleware = require('../middleware/auth.middleware')
 
 const router = express.Router()
 
-// POST /api/auth/login
+// Login — validate email and password before hitting controller
 router.post(
   '/login',
   [
@@ -23,7 +23,7 @@ router.post(
   login
 )
 
-// GET /api/auth/me — protected
-router.get('/me', authMiddleware, me)
+// Get current user — requires valid JWT
+router.get('/me', authMiddleware, getMe)
 
 module.exports = router

@@ -12,7 +12,7 @@ const authMiddleware = async (req, res, next) => {
     // Extract token from Authorization header
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'No token provided. Please log in.' })
+      return res.status(401).json({ success: false, message: 'No token provided' })
     }
 
     const token = authHeader.split(' ')[1]
@@ -20,19 +20,16 @@ const authMiddleware = async (req, res, next) => {
     // Verify token signature and expiry
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
 
-    // Fetch user from DB to ensure they still exist and are active
+    // Attach user to request
     const user = await User.findById(decoded.userId).select('-password')
-    if (!user || !user.isActive) {
-      return res.status(401).json({ message: 'User not found or inactive.' })
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'User not found' })
     }
 
     req.user = user
     next()
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ message: 'Session expired. Please log in again.' })
-    }
-    return res.status(401).json({ message: 'Invalid token. Please log in.' })
+    return res.status(401).json({ success: false, message: 'Invalid or expired token' })
   }
 }
 
