@@ -1,21 +1,57 @@
 /**
  * @file db.js
- * @description MongoDB connection using Mongoose.
- *              Retries on failure and logs connection status.
+ * @description MongoDB connection configuration using Mongoose.
+ *              Handles connection, disconnection, and error handling.
+ * @requires    mongoose, dotenv
  */
-const mongoose = require('mongoose')
 
-const connectDB = async () => {
+import mongoose from 'mongoose';
+
+/**
+ * Connect to MongoDB Atlas
+ * Uses connection string from MONGODB_URI environment variable
+ *
+ * @async
+ * @throws {Error} If connection fails
+ */
+export const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+    const mongoURI = process.env.MONGODB_URI;
+
+    if (!mongoURI) {
+      throw new Error(
+        '❌ MONGODB_URI not defined in .env file. Add your MongoDB connection string.'
+      );
+    }
+
+    await mongoose.connect(mongoURI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-    })
-    console.log(`✅ MongoDB connected: ${conn.connection.host}`)
-  } catch (error) {
-    console.error(`❌ MongoDB connection failed: ${error.message}`)
-    process.exit(1)
-  }
-}
+    });
 
-module.exports = connectDB
+    console.log('✅ MongoDB connected successfully');
+  } catch (error) {
+    console.error('❌ MongoDB connection failed:', error.message);
+    process.exit(1); // Exit if DB connection fails
+  }
+};
+
+/**
+ * Graceful shutdown — disconnect from DB
+ *
+ * @async
+ */
+export const disconnectDB = async () => {
+  try {
+    await mongoose.disconnect();
+    console.log('✅ MongoDB disconnected');
+  } catch (error) {
+    console.error('❌ Error disconnecting from MongoDB:', error.message);
+  }
+};
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection:', reason);
+  process.exit(1);
+});

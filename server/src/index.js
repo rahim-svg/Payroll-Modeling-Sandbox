@@ -1,54 +1,95 @@
 /**
  * @file index.js
  * @description Express application entry point.
- *              Sets up middleware chain, mounts all routes, and starts the server.
- *              Connects to MongoDB before accepting requests.
+ *              Sets up middleware, database connection, routes, and error handling.
+ *              This is the main server file that runs on startup.
+ * @requires    dotenv, express, mongoose, cors, helmet, morgan
  */
-require('dotenv').config()
-const express = require('express')
-const cors = require('cors')
-const path = require('path')
-const connectDB = require('./config/db')
-const errorMiddleware = require('./middleware/error.middleware')
 
-// Route imports
-const authRoutes = require('./routes/auth.routes')
-const censusRoutes = require('./routes/census.routes')
-const runRoutes = require('./routes/run.routes')
-const exportRoutes = require('./routes/export.routes')
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import { connectDB } from './config/db.js';
+import errorMiddleware from './middleware/error.middleware.js';
 
-const app = express()
-const PORT = process.env.PORT || 5000
+const app = express();
+const PORT = process.env.PORT || 5000;
 
-// ─── Middleware ───────────────────────────────────────────────
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true,
-}))
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+// ============================================
+// MIDDLEWARE SETUP
+// ============================================
 
-// ─── Routes ──────────────────────────────────────────────────
-app.use('/api/auth', authRoutes)
-app.use('/api/census', censusRoutes)
-app.use('/api/run', runRoutes)
-app.use('/api/export', exportRoutes)
+// Security & Logging
+app.use(helmet()); // Secure HTTP headers
+app.use(morgan('dev')); // Request logging
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'MoTek Payroll Engine running', timestamp: new Date().toISOString() })
-})
-
-// ─── Error Handler ────────────────────────────────────────────
-app.use(errorMiddleware)
-
-// ─── Start ───────────────────────────────────────────────────
-const start = async () => {
-  await connectDB()
-  app.listen(PORT, () => {
-    console.log(`✅ Server running on http://localhost:${PORT}`)
-    console.log(`🔧 Rollfi mock mode: ${process.env.ROLLFI_MOCK === 'true' ? 'ON' : 'OFF'}`)
+// CORS — Allow frontend to communicate
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    credentials: true,
   })
-}
+);
 
-start()
+// Body Parser
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// ============================================
+// DATABASE CONNECTION
+// ============================================
+
+connectDB();
+
+// ============================================
+// ROUTE MOUNTING (To be added in future phases)
+// ============================================
+
+// TODO: Mount auth routes
+// TODO: Mount census routes
+// TODO: Mount run routes
+// TODO: Mount export routes
+
+// ============================================
+// HEALTH CHECK ENDPOINT
+// ============================================
+
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+  });
+});
+
+// ============================================
+// 404 HANDLER
+// ============================================
+
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    path: req.path,
+    method: req.method,
+  });
+});
+
+// ============================================
+// GLOBAL ERROR HANDLER (Must be last)
+// ============================================
+
+app.use(errorMiddleware);
+
+// ============================================
+// START SERVER
+// ============================================
+
+app.listen(PORT, () => {
+  console.log(`\n✅ Server running on http://localhost:${PORT}`);
+  console.log(`📡 Environment: ${process.env.NODE_ENV}`);
+  console.log(`🔗 Health check: http://localhost:${PORT}/api/health\n`);
+});
+
+export default app;
